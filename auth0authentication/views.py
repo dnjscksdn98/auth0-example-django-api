@@ -2,13 +2,18 @@ from functools import wraps
 import jwt
 
 from django.http import JsonResponse
+from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.generics import ListAPIView
+
+from .models import Item
+from .serializers import ItemSerializer
 
 
 def get_token_auth_header(request):
-    """Obtains the Access Token from the Authorization Header
-    """
+    # Obtains the Access Token from the Authorization Header
+
     auth = request.META.get("HTTP_AUTHORIZATION", None)
     parts = auth.split()
     token = parts[1]
@@ -17,10 +22,9 @@ def get_token_auth_header(request):
 
 
 def requires_scope(required_scope):
-    """Determines if the required scope is present in the Access Token
-    Args:
-        required_scope (str): The scope required to access the resource
-    """
+    # Determines if the required scope is present in the Access Token Args:
+    # required_scope (str): The scope required to access the resource
+
     def require_scope(f):
         @wraps(f)
         def decorated(*args, **kwargs):
@@ -54,3 +58,22 @@ def private(request):
 @requires_scope('read:messages')
 def private_scoped(request):
     return JsonResponse({'message': 'Hello from a private endpoint! You need to be authenticated and have a scope of read:messages to see this.'})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_items(request):
+    if request.method == 'GET':
+        items = Item.objects.all()
+        serializer = ItemSerializer(items, many=True)
+        return Response(serializer.data)
+
+
+class GetItemsView(ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ItemSerializer
+
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            return Item.objects.all()
+        return Item.objects.none()
